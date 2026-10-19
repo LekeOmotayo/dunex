@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dunex"
+version = "1.0.0"
+description = "High-throughput Python middleware library and FastAPI service for comprehensive LLM guardrails and data leakage prevention."
+readme = "README.md"
+authors = [{ name = "Leke Omotayo" }]
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6.0,<3.0.0",
+    "starlette>=0.36.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.110.0,<1.0.0",
+    "uvicorn[standard]>=0.28.0,<1.0.0",
+]
+dynamodb = [
+    "boto3>=1.34.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.27.0",
+    "mypy>=1.9.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dunex*"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+disallow_untyped_defs = true

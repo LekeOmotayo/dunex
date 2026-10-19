@@ -1,0 +1,25 @@
+services:
+  # ── Dunex LLM Guardrails & Data Leakage Prevention Web Service ─────────────
+  - type: web
+    name: dunex-guardrails-service
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DUNEX_ENV
+        value: production
+      - key: PORT
+        value: 8000
+      - key: HOST
+        value: 0.0.0.0
+      - key: DUNEX_API_TOKENS
+        generateValue: true
+      - key: DUNEX_HASH_SALT
+        generateValue: true
+      - key: DUNEX_AUDIT_BACKEND
+        value: memory
+      - key: LOG_LEVEL
+        value: INFO

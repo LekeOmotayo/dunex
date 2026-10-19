@@ -1,0 +1,21 @@
+services:
+  dunex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dunex-guardrails
+    ports:
+      - "8000:8000"
+    environment:
+      - DUNEX_ENV=development
+      - PORT=8000
+      - HOST=0.0.0.0
+      - LOG_LEVEL=INFO
+      - DUNEX_API_TOKENS=dunex-dev-token
+      - DUNEX_AUDIT_BACKEND=memory
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
