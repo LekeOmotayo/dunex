@@ -1,4 +1,6 @@
 // Dunex LLM Guardrails & Data Leakage Prevention — Client Engine
+const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
+
 document.addEventListener('DOMContentLoaded', () => {
   // Navigation tabs
   const tabButtons = document.querySelectorAll('.nav-item[data-tab]');
@@ -58,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function callDunexAPI(endpoint, payload) {
     const startTime = performance.now();
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch(API_BASE + endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
