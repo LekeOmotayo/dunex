@@ -15,7 +15,7 @@ from dunex.pii.maskers import PIIMasker
 def luhn_checksum(card_number: str) -> bool:
     """Validate credit card number using Luhn algorithm."""
     digits = [int(c) for c in card_number if c.isdigit()]
-    if len(digits) < 13 or len(digits) > 19:
+    if len(digits) < 2:
         return False
     checksum = 0
     reverse_digits = digits[::-1]

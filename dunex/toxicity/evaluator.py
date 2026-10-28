@@ -12,7 +12,8 @@ from dunex.models import ToxicityScore
 # Harm categories with weighted lexicons & patterns
 HARM_PATTERNS: Dict[str, List[Tuple[re.Pattern, float]]] = {
     "threat": [
-        (re.compile(r"(?i)\b(?:i\s+will|going\s+to)\s+(?:kill|murder|shoot|stab|destroy|hurt|bomb)\s+you\b"), 0.98),
+        (re.compile(r"(?i)\b(?:i\s+will|going\s+to)(?:[\s\w,]+)?\s+(?:kill|murder|shoot|stab|destroy|hurt|bomb)\s+you\b"), 0.98),
+        (re.compile(r"(?i)\b(?:kill|murder|shoot|stab|destroy|hurt|bomb)\s+you\b"), 0.95),
         (re.compile(r"(?i)\b(?:hope\s+you\s+die|deserve\s+to\s+die|burn\s+in\s+hell)\b"), 0.90),
         (re.compile(r"(?i)\b(?:execute|slaughter|assassinate)\s+(?:them|him|her|you|all)\b"), 0.95),
     ],

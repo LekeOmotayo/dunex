@@ -10,8 +10,8 @@ from dunex.pii.classifier import LocalTokenClassifier, compute_shannon_entropy
 
 def test_luhn_algorithm():
     # Valid credit cards
-    assert luhn_checksum("4532015012345678") is True
-    assert luhn_checksum("4532-0150-1234-5678") is True
+    assert luhn_checksum("4532015012345671") is True
+    assert luhn_checksum("4532-0150-1234-5671") is True
     assert luhn_checksum("49927398716") is True
 
     # Invalid cards

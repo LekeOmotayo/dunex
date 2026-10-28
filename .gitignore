@@ -27,3 +27,7 @@ htmlcov/
 .mypy_cache/
 audit_logs.jsonl
 .env
+
+*.log
+.server.*.log
+
