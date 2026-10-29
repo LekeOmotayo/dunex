@@ -1,36 +1,30 @@
 """
 FastAPI Service wrapper for Dunex LLM Guardrails & Data Leakage Prevention.
-Serves REST inspection APIs, agent policy configuration, DynamoDB audit queries,
-and an embedded interactive developer console.
+Layered Clean Architecture with separated Controllers, Services, and Repositories.
 """
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
-from dunex import (
-    AgentPolicy,
-    AgentPolicyRegistry,
-    AuditLogger,
-    GuardrailPipeline,
-    GuardrailsConfig,
-    GuardrailsMiddleware,
-    GuardrailVerdict,
-    InspectionRequest,
-    InspectionResult,
-    MaskingStrategy,
+from dunex.config import GuardrailsConfig
+from dunex.middleware import GuardrailsMiddleware
+from app.api.controllers.guardrail_controller import (
+    router as guardrail_router,
+    get_guardrail_service,
 )
+from app.api.controllers.policy_controller import router as policy_router
+from app.api.controllers.audit_controller import router as audit_router
+from app.api.controllers.health_controller import router as health_router
 
-# Initialize application
+# Initialize configuration
 config = GuardrailsConfig.load()
-pipeline = GuardrailPipeline(config=config)
+guardrail_service = get_guardrail_service()
 
 app = FastAPI(
     title="Dunex — LLM Guardrails & Data Leakage Prevention API",
@@ -40,7 +34,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS
+# CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -52,9 +46,15 @@ app.add_middleware(
 # Transparent ASGI Guardrails middleware on protected routes
 app.add_middleware(
     GuardrailsMiddleware,
-    pipeline=pipeline,
+    pipeline=guardrail_service.pipeline,
     protected_paths=["/v1/guardrails/chat/completions"],
 )
+
+# Mount Clean Layered Controllers
+app.include_router(health_router)
+app.include_router(guardrail_router)
+app.include_router(policy_router)
+app.include_router(audit_router)
 
 # Static files setup
 STATIC_DIR = Path(__file__).parent / "static"
@@ -80,171 +80,3 @@ async def serve_dashboard():
             "docs": "/docs",
         }
     )
-
-
-# ── Health & Telemetry ───────────────────────────────────────────────────────
-
-@app.get("/health", tags=["Health"])
-async def health():
-    """Liveness probe for container orchestrators and Render."""
-    return {"status": "ok", "service": config.service_name, "version": config.version}
-
-
-@app.get("/ready", tags=["Health"])
-async def readiness():
-    """Readiness probe."""
-    return {"status": "ready"}
-
-
-# ── Guardrail Inspection APIs ────────────────────────────────────────────────
-
-@app.post(
-    "/v1/guardrails/inspect-input",
-    response_model=InspectionResult,
-    tags=["Guardrail Inspection"],
-    summary="Inspect and sanitize inbound prompt",
-)
-async def inspect_input(req: InspectionRequest):
-    """
-    Inspect inbound prompt text for PII data leakage, prompt injections, toxicity,
-    and agent permission boundaries.
-    """
-    result = pipeline.inspect(
-        text=req.text,
-        agent_id=req.agent_id,
-        tenant_id=req.tenant_id,
-        direction="input",
-        metadata=req.metadata,
-    )
-    return result
-
-
-@app.post(
-    "/v1/guardrails/inspect-output",
-    response_model=InspectionResult,
-    tags=["Guardrail Inspection"],
-    summary="Inspect and sanitize outbound LLM generation",
-)
-async def inspect_output(req: InspectionRequest):
-    """
-    Inspect outbound LLM response text for PII leakage, confidential API keys,
-    credit cards, and harmful output vectors before sending to user.
-    """
-    result = pipeline.inspect(
-        text=req.text,
-        agent_id=req.agent_id,
-        tenant_id=req.tenant_id,
-        direction="output",
-        metadata=req.metadata,
-    )
-    return result
-
-
-# ── Sample Protected LLM Proxy Endpoint ──────────────────────────────────────
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
-class ChatCompletionRequest(BaseModel):
-    model: str = "gpt-4o-mini"
-    messages: List[ChatMessage]
-    temperature: float = 0.7
-
-
-@app.post(
-    "/v1/guardrails/chat/completions",
-    tags=["LLM Proxy"],
-    summary="OpenAI-compatible protected chat completions endpoint",
-)
-async def protected_chat_completion(req: ChatCompletionRequest):
-    """
-    Simulated OpenAI-compatible endpoint automatically protected by GuardrailsMiddleware.
-    Inbound messages have PII masked and prompt injections blocked.
-    """
-    last_user_msg = req.messages[-1].content if req.messages else ""
-    return {
-        "id": "chatcmpl-dunex-sample",
-        "object": "chat.completion",
-        "model": req.model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": f"[Simulated LLM Response] Safe response to clean prompt: '{last_user_msg[:60]}...'",
-                },
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {
-            "prompt_tokens": len(last_user_msg.split()),
-            "completion_tokens": 15,
-            "total_tokens": len(last_user_msg.split()) + 15,
-        },
-    }
-
-
-# ── Agent Policy Configuration APIs ──────────────────────────────────────────
-
-@app.get(
-    "/v1/agents",
-    response_model=List[AgentPolicy],
-    tags=["Agent Permissions"],
-    summary="List all registered agent permission policies",
-)
-async def list_agent_policies():
-    """Retrieve all active per-agent security boundary policies."""
-    return pipeline.policies.list_policies()
-
-
-@app.get(
-    "/v1/agents/{agent_id}/policy",
-    response_model=AgentPolicy,
-    tags=["Agent Permissions"],
-    summary="Get policy for a specific agent",
-)
-async def get_agent_policy(agent_id: str):
-    """Retrieve security boundaries, topic rules, and PII masking strategy for an agent."""
-    return pipeline.policies.get(agent_id)
-
-
-@app.put(
-    "/v1/agents/{agent_id}/policy",
-    response_model=AgentPolicy,
-    tags=["Agent Permissions"],
-    summary="Create or update policy for an agent",
-)
-async def update_agent_policy(agent_id: str, policy: AgentPolicy):
-    """Register or update an agent's permission boundaries and sensitivity levels."""
-    policy.agent_id = agent_id
-    pipeline.policies.register(policy)
-    return policy
-
-
-# ── Audit Trail & Telemetry APIs ─────────────────────────────────────────────
-
-@app.get(
-    "/v1/audit/logs",
-    tags=["Audit & Compliance"],
-    summary="Query immutable DynamoDB-formatted audit records",
-)
-async def query_audit_logs(
-    limit: int = 50,
-    agent_id: Optional[str] = None,
-    verdict: Optional[GuardrailVerdict] = None,
-):
-    """Query recent audit records structured in single-table DynamoDB format."""
-    items = pipeline.audit.get_recent(limit=limit, agent_id=agent_id, verdict=verdict)
-    return [item.model_dump() for item in items]
-
-
-@app.get(
-    "/v1/audit/summary",
-    tags=["Audit & Compliance"],
-    summary="Get aggregate telemetry and compliance summary",
-)
-async def get_audit_summary():
-    """Retrieve real-time metrics on total inspections, block rates, and PII incidents."""
-    return pipeline.audit.get_summary()
